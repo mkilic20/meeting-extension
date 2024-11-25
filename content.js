@@ -1,226 +1,202 @@
 let costData = {};
+let currentObserver = null;
+let lastKnownCost = 0;
+let isProcessing = false;
 
-async function initialize() {
-  console.log('Calendar Cost Extension: Initializing...');
-  try {
-    const response = await fetch(chrome.runtime.getURL("data.json"));
-    costData = await response.json();
-    console.log('Calendar Cost Extension: Data loaded successfully', costData);
-    setupObserver();
-  } catch (error) {
-    console.error('Calendar Cost Extension: Failed to load cost data:', error);
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    if (isProcessing) return;
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      isProcessing = true;
+      func.apply(this, args);
+      isProcessing = false;
+    }, wait);
+  };
+}
+
+function setupEventListeners() {
+  console.log('Setting up event listeners...');
+  // Listen for clicks on calendar events
+  document.addEventListener('click', debounce((event) => {
+    const eventElement = event.target.closest('[role="button"], [role="link"]');
+    if (eventElement) {
+      console.log('Calendar event clicked:', eventElement);
+      setTimeout(checkForEventDialog, 100);
+    }
+  }, 250));
+
+  setupBackupObserver();
+}
+
+function checkForEventDialog() {
+  const eventDialog = document.querySelector('.ecHOgf.RDlrG.Inn9w.iWO5td');
+  if (eventDialog) {
+    console.log('Event dialog found');
+    initializeEventPage(eventDialog);
   }
 }
 
-function setupObserver() {
-  console.log('Calendar Cost Extension: Setting up observer...');
-  
-  // Use requestAnimationFrame to throttle observer callbacks
-  let ticking = false;
+function setupBackupObserver() {
+  if (currentObserver) {
+    currentObserver.disconnect();
+  }
 
-  const observer = new MutationObserver((mutations) => {
-    if (!ticking) {
-      requestAnimationFrame(() => {
-        // Check for create event dialog with specific class
-        const createEventDialog = document.querySelector('.ecHOgf.RDlrG.Inn9w.iWO5td');
-        if (createEventDialog) {
-          console.log('Calendar Cost Extension: Create Event dialog detected with specific classes!');
-          initializeEventPage();
+  currentObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type === 'childList' && mutation.addedNodes.length) {
+        const eventDialog = document.querySelector('.ecHOgf.RDlrG.Inn9w.iWO5td');
+        if (eventDialog) {
+          console.log('Event dialog detected through mutation observer');
+          initializeEventPage(eventDialog);
+          break;
         }
-        
-        // Keep existing checks as fallback
-        const eventDetails = document.querySelector('[aria-label="Event details"]');
-        if (eventDetails) {
-          console.log('Calendar Cost Extension: Event details found, initializing...');
-          initializeEventPage();
-        }
-        
-        ticking = false;
-      });
-      
-      ticking = true;
+      }
     }
   });
 
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['class']
-  });
-
-  // Initial check
-  requestAnimationFrame(() => {
-    if (document.querySelector('.ecHOgf.RDlrG.Inn9w.iWO5td')) {
-      console.log('Calendar Cost Extension: Create Event dialog found on initial check (specific classes)');
-      initializeEventPage();
-    }
-  });
+  const calendarContainer = document.querySelector('[role="main"]');
+  if (calendarContainer) {
+    currentObserver.observe(calendarContainer, {
+      childList: true,
+      subtree: true,
+      attributes: false
+    });
+  }
 }
 
-function createCostDisplay() {
+function initializeEventPage(eventDialog) {
+  console.log('Initializing event page...');
+  createCostDisplay(eventDialog);
+  calculateAndDisplayCost(eventDialog);
+}
+
+function calculateAndDisplayCost(eventDialog) {
+  console.log('Calculating costs...');
+  const uniqueEmails = new Set();
+  let totalCost = 0;
+
+  // Only search within the current event dialog
+  const participants = eventDialog.querySelectorAll('.nBzcnc.Wm6kRe[data-email]');
+  console.log(`Found ${participants.length} participants`);
+
+  participants.forEach(participant => {
+    const email = participant.getAttribute('data-email');
+    if (!email || email.includes('resource.calendar.google.com') || uniqueEmails.has(email)) {
+      console.log('Skipping participant:', email);
+      return;
+    }
+    
+    console.log('Processing participant:', email);
+    uniqueEmails.add(email);
+    if (email in costData.highLevelEmployees) {
+      totalCost += costData.highLevelEmployees[email];
+      console.log(`Added high level cost for ${email}: ${costData.highLevelEmployees[email]}`);
+    } else if (email in costData.lowLevelEmployees) {
+      totalCost += costData.lowLevelEmployees[email];
+      console.log(`Added low level cost for ${email}: ${costData.lowLevelEmployees[email]}`);
+    } else {
+      totalCost += costData.defaultCost;
+      console.log(`Added default cost for ${email}: ${costData.defaultCost}`);
+    }
+  });
+
+  console.log('Total cost calculated:', totalCost);
+  if (totalCost !== lastKnownCost) {
+    console.log('Cost changed, updating display');
+    lastKnownCost = totalCost;
+    updateCostDisplay(totalCost);
+  }
+}
+
+function createCostDisplay(container) {
+  console.log('Creating cost display...');
   let costDisplay = document.getElementById('total-cost-display');
   
   if (!costDisplay) {
+    console.log('Creating new cost display element');
     costDisplay = document.createElement('div');
     costDisplay.id = 'total-cost-display';
     
-    // Try multiple possible container selectors
-    const possibleContainers = [
-      '.BTotkb',                    // Original buttons container
-      '.JaKw1',                     // Alternative buttons container
-      '[jsname="c6xFrd"]',         // Parent container
-      '[aria-label="Event details"]' // Event details container
-    ];
-
-    let container = null;
-    for (const selector of possibleContainers) {
-      container = document.querySelector(selector);
-      if (container) break;
-    }
-
-    if (container) {
-      // Insert before the container
-      container.parentElement.insertBefore(costDisplay, container);
-    } else {
-      // Fallback: Try to insert into the event details section
-      const eventDetails = document.querySelector('[aria-label="Event details"]');
-      if (eventDetails) {
-        eventDetails.insertBefore(costDisplay, eventDetails.firstChild);
-      }
-    }
-  }
-}
-
-function initializeEventPage() {
-  console.log('Calendar Cost Extension: Initializing event page...');
-  
-  // Look for the participants container with multiple possible selectors
-  const participantContainer = document.querySelector([
-    '[aria-label="Event details"]',
-    '.ecHOgf.RDlrG.Inn9w.iWO5td',
-    '[jscontroller="UWz6dd"]'  // This is often the participant controller
-  ].join(', '));
-  
-  if (!participantContainer) {
-    console.log('Calendar Cost Extension: Participant container not found');
-    return;
-  }
-
-  console.log('Calendar Cost Extension: Found participant container');
-
-  // Remove any existing observers
-  if (participantContainer._observer) {
-    participantContainer._observer.disconnect();
-  }
-
-  // Create new observer specifically for participants
-  const observer = new MutationObserver(() => {
-    console.log('Calendar Cost Extension: Participant change detected');
-    requestAnimationFrame(monitorParticipants);
-  });
-  
-  participantContainer._observer = observer;
-  
-  observer.observe(participantContainer, {
-    childList: true,
-    subtree: true,
-    characterData: true,
-    attributes: true,
-    attributeFilter: ['data-email']  // Watch specifically for email attributes
-  });
-
-  // Initial calculation
-  console.log('Calendar Cost Extension: Running initial participant check');
-  monitorParticipants();
-}
-
-function monitorParticipants() {
-  console.log('Calendar Cost Extension: Monitoring participants...');
-  
-  // Use a Set to store unique emails
-  const uniqueEmails = new Set();
-  
-  // Look for participants in the guest list container
-  const participants = Array.from(
-    document.querySelectorAll([
-      '[jsname="MsyPn"] [data-email]',  // Main guest list container
-      '.nBzcnc.Wm6kRe[data-email]',     // Individual guest items
-      '.Zce9sc[data-email]'             // Another guest item class
-    ].join(', '))
-  );
-  
-  console.log('Calendar Cost Extension: Found participant elements:', participants);
-  
-  let totalCost = 0;
-  participants.forEach(participant => {
-    const email = participant.getAttribute('data-email');
+    // Try to find the best location to insert the cost display
+    const insertLocation = container.querySelector('.d29e1c') || // Top of dialog
+                          container.querySelector('.I7OXgf') ||  // Alternative location
+                          container.firstChild;                  // Fallback
     
-    // Skip resource calendars and already counted participants
-    if (email && 
-        !email.includes('resource.calendar.google.com') && 
-        !uniqueEmails.has(email)) {
-      
-      uniqueEmails.add(email); // Add to set of processed emails
-      console.log('Calendar Cost Extension: Processing participant:', email);
-      
-      if (email in costData.highLevelEmployees) {
-        totalCost += costData.highLevelEmployees[email];
-        console.log(`Calendar Cost Extension: Added high level cost for ${email}: ${costData.highLevelEmployees[email]}`);
-      } else if (email in costData.lowLevelEmployees) {
-        totalCost += costData.lowLevelEmployees[email];
-        console.log(`Calendar Cost Extension: Added low level cost for ${email}: ${costData.lowLevelEmployees[email]}`);
-      } else {
-        totalCost += costData.defaultCost;
-        console.log(`Calendar Cost Extension: Added default cost for ${email}: ${costData.defaultCost}`);
-      }
+    if (insertLocation) {
+      container.insertBefore(costDisplay, insertLocation);
+      console.log('Cost display element inserted');
+    } else {
+      console.log('Could not find suitable location for cost display');
+      container.appendChild(costDisplay);
     }
-  });
-
-  console.log('Calendar Cost Extension: Total cost calculated:', totalCost);
-  updateCostDisplay(totalCost);
+  } else {
+    console.log('Cost display already exists');
+  }
+  
+  return costDisplay;
 }
 
 function updateCostDisplay(totalCost) {
-  console.log('Calendar Cost Extension: Updating cost display:', totalCost);
+  console.log('Updating cost display:', totalCost);
   let costDisplay = document.getElementById('total-cost-display');
-  
   if (!costDisplay) {
-    console.log('Calendar Cost Extension: Creating new cost display element');
-    costDisplay = document.createElement('div');
-    costDisplay.id = 'total-cost-display';
-    
-    // Try to find the container
-    const container = document.querySelector('.BTotkb') || 
-                     document.querySelector('.JaKw1') ||
-                     document.querySelector('[jsname="c6xFrd"]');
-    
-    if (container) {
-      console.log('Calendar Cost Extension: Found container, inserting cost display');
-      container.parentElement.insertBefore(costDisplay, container);
-    } else {
-      console.log('Calendar Cost Extension: No container found, appending to event details');
-      const eventDetails = document.querySelector('[aria-label="Event details"]');
-      if (eventDetails) {
-        eventDetails.insertBefore(costDisplay, eventDetails.firstChild);
-      }
-    }
+    console.log('Cost display element not found');
+    return;
   }
   
-  // Update the content with proper structure
   costDisplay.innerHTML = `
     <div class="cost-content">
       <span class="cost-label">Meeting Cost</span>
       <span class="cost-value">${totalCost}</span>
     </div>
   `;
+  console.log('Cost display updated');
 }
 
-// Start the initialization
-initialize();
+function cleanup() {
+  console.log('Cleaning up...');
+  if (currentObserver) {
+    currentObserver.disconnect();
+    currentObserver = null;
+    console.log('Observer disconnected');
+  }
+  const costDisplay = document.getElementById('total-cost-display');
+  if (costDisplay) {
+    costDisplay.remove();
+    console.log('Cost display removed');
+  }
+}
 
-// Also try to initialize when the page loads
-document.addEventListener('DOMContentLoaded', initialize);
-// And when the URL changes (for single-page-app navigation)
-window.addEventListener('popstate', initialize);
+async function initialize() {
+  console.log('Initializing extension...');
+  try {
+    if (!costData.defaultCost) {
+      console.log('Loading cost data...');
+      const response = await fetch(chrome.runtime.getURL("data.json"));
+      costData = await response.json();
+      console.log('Cost data loaded:', costData);
+    }
+    setupEventListeners();
+  } catch (error) {
+    console.error('Cost Calculator: Init failed:', error);
+  }
+}
+
+// Start initialization
+if (document.readyState === 'loading') {
+  console.log('Document still loading, waiting...');
+  document.addEventListener('DOMContentLoaded', initialize);
+} else {
+  console.log('Document already loaded, initializing...');
+  initialize();
+}
+
+// Handle navigation
+window.addEventListener('popstate', debounce(() => {
+  console.log('Navigation detected');
+  cleanup();
+  initialize();
+}, 500));
   
