@@ -3,20 +3,27 @@
     font-size: 14px;
     color: #3c4043;
     padding: 16px 24px;
-    margin: 0;
+    margin: 8px 0;
     display: flex;
     align-items: center;
     background-color: #fff;
-    border-bottom: 1px solid #dadce0;
     width: 100%;
     box-sizing: border-box;
+    border-top: 1px solid #dadce0;
 }
 
 .cost-content {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     width: 100%;
+    gap: 16px;
+}
+
+.cost-details {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .cost-label {
@@ -26,6 +33,11 @@
     line-height: 1.25rem;
 }
 
+.duration-label {
+    color: #5f6368;
+    font-size: 13px;
+}
+
 .cost-value {
     color: #1a73e8;
     font-weight: 500;
@@ -33,12 +45,57 @@
     border-radius: 4px;
     background-color: rgba(26, 115, 232, 0.08);
     font-size: 13px;
+    min-width: 60px;
+    text-align: right;
 }
 
 .cost-value::before {
     content: "⭐";
     margin-right: 6px;
     font-size: 14px;
+}
+
+.participant-cost {
+    display: flex;
+    align-items: center;
+    margin: 0 8px;
+    opacity: 1 !important;
+}
+
+.individual-cost {
+    color: #1a73e8;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: rgba(26, 115, 232, 0.08);
+    font-size: 13px;
+    white-space: nowrap;
+    visibility: visible !important;
+}
+
+/* Ensure the participant container shows all content */
+.nBzcnc.Wm6kRe {
+    overflow: visible !important;
+}
+
+/* Adjust layout of participant row */
+.toUqff {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Container for buttons */
+.zZj8Pb.uLZ20b {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+/* Ensure proper spacing */
+.HaHl0c {
+    display: flex;
+    align-items: center;
 }
 
   
