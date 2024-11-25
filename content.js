@@ -18,6 +18,21 @@ function debounce(func, wait) {
 
 function setupEventListeners() {
   console.log('Setting up event listeners...');
+
+  const observer = new MutationObserver((mutations) => {
+    // Add callback function for the observer
+    for (const mutation of mutations) {
+      if (mutation.type === 'childList' && mutation.addedNodes.length) {
+        const eventDialog = document.querySelector('.ecHOgf.RDlrG.Inn9w.iWO5td');
+        if (eventDialog) {
+          console.log('Event dialog detected through mutation observer');
+          initializeEventPage(eventDialog);
+          break;
+        }
+      }
+    }
+  });
+
   // Listen for clicks on calendar events
   document.addEventListener('click', debounce((event) => {
     const eventElement = event.target.closest('[role="button"], [role="link"]');
@@ -70,12 +85,59 @@ function initializeEventPage(eventDialog) {
   console.log('Initializing event page...');
   createCostDisplay(eventDialog);
   calculateAndDisplayCost(eventDialog);
+  const cleanup = setupParticipantListeners(eventDialog);
+  
+  // Store cleanup function for later use
+  eventDialog.dataset.costCalculatorCleanup = true;
+  return cleanup;
+}
+
+function setupParticipantListeners(eventDialog) {
+  const dialogObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      // Check if we're dealing with participant elements
+      const participantsContainer = eventDialog.querySelector('[jsname="MsyPn"]');
+      if (!participantsContainer?.contains(mutation.target)) {
+        continue;
+      }
+
+      // Check for participant elements that need cost displays
+      const participants = participantsContainer.querySelectorAll('.nBzcnc.Wm6kRe[data-email]:not(:has(.participant-cost))');
+      if (participants.length > 0) {
+        console.log('Found participants without cost displays:', participants.length);
+        participants.forEach(participant => {
+          const email = participant.getAttribute('data-email');
+          if (!email || email.includes('resource.calendar.google.com')) return;
+          
+          const hourlyRate = getHourlyRate(email);
+          const duration = getMeetingDuration(eventDialog);
+          const participantCost = (hourlyRate * duration.hours);
+          const isOptional = participant.querySelector('.dHiIVd')?.textContent.includes('Optional');
+          addParticipantCost(participant, participantCost, isOptional);
+        });
+        
+        // Recalculate total costs
+        calculateAndDisplayCost(eventDialog);
+      }
+    }
+  });
+
+  // Observe the entire participants container
+  const participantsContainer = eventDialog.querySelector('[jsname="MsyPn"]');
+  if (participantsContainer) {
+    dialogObserver.observe(participantsContainer, {
+      childList: true,
+      subtree: true,
+      attributes: false
+    });
+  }
 }
 
 function calculateAndDisplayCost(eventDialog) {
   console.log('Calculating costs...');
   const uniqueEmails = new Set();
-  let totalCost = 0;
+  let requiredCost = 0;
+  let optionalCost = 0;
 
   // Get meeting duration
   const duration = getMeetingDuration(eventDialog);
@@ -94,47 +156,69 @@ function calculateAndDisplayCost(eventDialog) {
     
     console.log('Processing participant:', email);
     uniqueEmails.add(email);
-    let hourlyRate = costData.defaultCost;
-    if (email in costData.highLevelEmployees) {
-      hourlyRate = costData.highLevelEmployees[email];
-    } else if (email in costData.lowLevelEmployees) {
-      hourlyRate = costData.lowLevelEmployees[email];
+    const hourlyRate = getHourlyRate(email);
+    const participantCost = (hourlyRate * duration.hours);
+    
+    // Check if participant is optional
+    const isOptional = participant.querySelector('.dHiIVd')?.textContent.includes('Optional');
+    if (isOptional) {
+      optionalCost += participantCost;
+    } else {
+      requiredCost += participantCost;
     }
     
-    const participantCost = (hourlyRate * duration.hours);
-    totalCost += participantCost;
+    // Add individual cost display with more robust positioning
+    addParticipantCost(participant, participantCost, isOptional);
     
-    // Add individual cost display
-    addParticipantCost(participant, participantCost);
-    
-    console.log(`Added cost for ${email}: ${participantCost} (${hourlyRate}/hour * ${duration.hours} hours)`);
+    console.log(`Added cost for ${email}: ${participantCost} (${hourlyRate}/hour * ${duration.hours} hours) - ${isOptional ? 'Optional' : 'Required'}`);
   });
 
-  console.log('Total cost calculated:', totalCost);
-  if (totalCost !== lastKnownCost) {
-    console.log('Cost changed, updating display');
-    lastKnownCost = totalCost;
-    updateCostDisplay(totalCost, duration);
-  }
+  const totalCost = requiredCost + optionalCost;
+  console.log('Costs calculated:', { required: requiredCost, optional: optionalCost, total: totalCost });
+  
+  updateCostDisplay(requiredCost, optionalCost, totalCost, duration);
 }
 
-function addParticipantCost(participantElement, cost) {
-  // Find or create the cost display element
-  let costElement = participantElement.querySelector('.participant-cost');
-  if (!costElement) {
-    costElement = document.createElement('div');
-    costElement.className = 'participant-cost';
-    
-    // Find the name/details container
-    const detailsContainer = participantElement.querySelector('.toUqff');
-    if (detailsContainer) {
-      // Insert after the details container
-      detailsContainer.insertAdjacentElement('afterend', costElement);
-    }
+function getHourlyRate(email) {
+  if (email in costData.highLevelEmployees) {
+    return costData.highLevelEmployees[email];
+  } else if (email in costData.lowLevelEmployees) {
+    return costData.lowLevelEmployees[email];
   }
+  return costData.defaultCost;
+}
+
+function addParticipantCost(participantElement, cost, isOptional) {
+  const email = participantElement.getAttribute('data-email');
+  const costId = `cost-${email.replace(/[^a-zA-Z0-9]/g, '-')}`;
+  
+  // Remove any existing cost element
+  const existingCost = participantElement.querySelector('.participant-cost');
+  if (existingCost) {
+    existingCost.remove();
+  }
+
+  // Create new cost element
+  const costElement = document.createElement('div');
+  costElement.id = costId;
+  costElement.className = 'participant-cost';
+  
+  // Important: Insert as the first child of the participant element
+  participantElement.insertBefore(costElement, participantElement.firstChild);
+  
+  costElement.style.cssText = `
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    margin-right: 8px !important;
+    align-items: center !important;
+  `;
   
   costElement.innerHTML = `
-    <span class="individual-cost">⭐ $${cost.toFixed(2)}</span>
+    <span class="individual-cost ${isOptional ? 'optional' : ''}" 
+          style="display: inline-flex !important; visibility: visible !important;">
+      ⭐ $${cost.toFixed(2)}
+    </span>
   `;
 }
 
@@ -255,8 +339,8 @@ function createCostDisplay(eventDialog) {
   return costDisplay;
 }
 
-function updateCostDisplay(totalCost, duration) {
-  console.log('Updating cost display:', totalCost);
+function updateCostDisplay(requiredCost, optionalCost, totalCost, duration) {
+  console.log('Updating cost display:', { required: requiredCost, optional: optionalCost, total: totalCost });
   let costDisplay = document.getElementById('total-cost-display');
   if (!costDisplay) {
     console.log('Cost display element not found');
@@ -269,7 +353,20 @@ function updateCostDisplay(totalCost, duration) {
         <span class="cost-label">Meeting Cost</span>
         <span class="duration-label">(${duration.display})</span>
       </div>
-      <span class="cost-value">${totalCost.toFixed(2)}</span>
+      <div class="cost-breakdown">
+        <div class="cost-item">
+          <span class="cost-sublabel">Required:</span>
+          <span class="cost-value">$${requiredCost.toFixed(2)}</span>
+        </div>
+        <div class="cost-item">
+          <span class="cost-sublabel">Optional:</span>
+          <span class="cost-value optional">$${optionalCost.toFixed(2)}</span>
+        </div>
+        <div class="cost-item total">
+          <span class="cost-sublabel">Total:</span>
+          <span class="cost-value">$${totalCost.toFixed(2)}</span>
+        </div>
+      </div>
     </div>
   `;
   console.log('Cost display updated');
@@ -282,6 +379,13 @@ function cleanup() {
     currentObserver = null;
     console.log('Observer disconnected');
   }
+  
+  // Clean up any existing event dialog observers
+  const eventDialog = document.querySelector('.ecHOgf.RDlrG.Inn9w.iWO5td');
+  if (eventDialog && eventDialog.dataset.costCalculatorCleanup) {
+    delete eventDialog.dataset.costCalculatorCleanup;
+  }
+  
   const costDisplay = document.getElementById('total-cost-display');
   if (costDisplay) {
     costDisplay.remove();

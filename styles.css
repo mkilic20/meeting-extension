@@ -98,4 +98,45 @@
     align-items: center;
 }
 
+.cost-breakdown {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.cost-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cost-sublabel {
+    color: #5f6368;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.cost-value.optional {
+    background-color: rgba(95, 99, 104, 0.08);
+    color: #5f6368;
+}
+
+.cost-item.total {
+    border-left: 1px solid #dadce0;
+    padding-left: 16px;
+    margin-left: 8px;
+}
+
+.individual-cost.optional {
+    background-color: rgba(95, 99, 104, 0.08);
+    color: #5f6368;
+}
+
+
+
+/* Ensure the name section doesn't push the cost too far right */
+.toUqff.DbpAnb {
+  flex: 1 !important;
+}
+
   
