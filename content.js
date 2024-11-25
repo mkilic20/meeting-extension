@@ -110,7 +110,7 @@ function calculateAndDisplayCost(eventDialog) {
   }
 }
 
-function createCostDisplay(container) {
+function createCostDisplay(eventDialog) {
   console.log('Creating cost display...');
   let costDisplay = document.getElementById('total-cost-display');
   
@@ -119,17 +119,32 @@ function createCostDisplay(container) {
     costDisplay = document.createElement('div');
     costDisplay.id = 'total-cost-display';
     
-    // Try to find the best location to insert the cost display
-    const insertLocation = container.querySelector('.d29e1c') || // Top of dialog
-                          container.querySelector('.I7OXgf') ||  // Alternative location
-                          container.firstChild;                  // Fallback
-    
-    if (insertLocation) {
-      container.insertBefore(costDisplay, insertLocation);
-      console.log('Cost display element inserted');
+    // Try multiple possible container selectors
+    const possibleContainers = [
+      '[jsname="B5dxMb"]',          // Buttons container
+      '.BTotkb',                    // Original buttons container
+      '.JaKw1',                     // Alternative buttons container
+      '[jsname="c6xFrd"]',          // Parent container
+      '[aria-label="Event details"]' // Event details container
+    ];
+
+    let container = null;
+    for (const selector of possibleContainers) {
+      container = eventDialog.querySelector(selector);
+      if (container) {
+        console.log(`Found container using selector: ${selector}`);
+        break;
+      }
+    }
+
+    if (container) {
+      // Insert before the container
+      container.parentElement.insertBefore(costDisplay, container);
+      console.log('Cost display element inserted before container');
     } else {
-      console.log('Could not find suitable location for cost display');
-      container.appendChild(costDisplay);
+      // Fallback: append to event dialog
+      console.log('No suitable container found, appending to event dialog');
+      eventDialog.appendChild(costDisplay);
     }
   } else {
     console.log('Cost display already exists');
