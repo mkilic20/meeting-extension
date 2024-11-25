@@ -1,0 +1,44 @@
+#total-cost-display {
+    font-family: Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    color: #3c4043;
+    padding: 16px 24px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    background-color: #fff;
+    border-bottom: 1px solid #dadce0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.cost-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.cost-label {
+    font-weight: 500;
+    color: #3c4043;
+    letter-spacing: .01428571em;
+    line-height: 1.25rem;
+}
+
+.cost-value {
+    color: #1a73e8;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: rgba(26, 115, 232, 0.08);
+    font-size: 13px;
+}
+
+.cost-value::before {
+    content: "⭐";
+    margin-right: 6px;
+    font-size: 14px;
+}
+
+  

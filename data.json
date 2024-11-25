@@ -1,0 +1,12 @@
+{
+    "highLevelEmployees": {
+      "hursit.topal@enuygun.com": 3,
+      "muzaffer.secgin@enuygun.com": 3
+    },
+    "lowLevelEmployees": {
+      "metehan.yaka@enuygun.com": 2,
+      "eren.kilic@enuygun.com": 2
+    },
+    "defaultCost": 1
+  }
+  
